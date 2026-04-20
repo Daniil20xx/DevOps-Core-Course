@@ -1,0 +1,99 @@
+name: Python CI
+
+on:
+  push:
+    paths:
+      - 'app_python/**'
+  pull_request:
+    paths:
+      - 'app_python/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.11
+        cache: "pip"
+      
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app_python/requirements.txt
+        pip install -r app_python/requirements-dev.txt
+      
+    - name: Run linter
+      run: ruff check .
+      
+    - name: Run pytest tests
+      run: |
+        pytest -v
+    
+    - name: Install Snyk CLI
+      run: npm install -g snyk
+
+    - name: Run Snyk Test
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      run: snyk test app_python --severity-threshold=high
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.12
+
+    - name: Install Ansible
+      run: pip install ansible
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+        aws-region: us-east-1
+    
+    - name: Set up SSH key
+      run: |
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > key.pem
+        chmod 600 key.pem
+
+    - name: Prepare Password
+      run: |
+        echo "${{ secrets.ANSIBLE_PASSWORD }}" > pass.txt
+        chmod 600 pass.txt
+
+    - name: Create temporary inventory
+      env:
+        SERVER_IP: ${{ secrets.SERVER_IP }}
+      run: |
+        echo "[webservers]" > inventory.ini
+        echo "ubuntu ansible_host=$SERVER_IP ansible_user=ubuntu ansible_ssh_private_key_file=key.pem" >> inventory.ini
+        cat inventory.ini
+
+    - name: Ansible Run
+      run: |
+         ansible-playbook -i inventory.ini ./ansible/playbooks/deploy.yml \
+          --extra-vars "@ansible/group_vars/all.yml" \
+          --vault-password-file="pass.txt"
+    
+    - name: Remove Password
+      run: |
+        rm pass.txt
+        rm key.pem
+
+    
