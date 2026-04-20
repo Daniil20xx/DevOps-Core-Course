@@ -1,0 +1,71 @@
+name: Python CI
+
+on:
+  push:
+    paths:
+      - 'app_python/**'
+  pull_request:
+    paths:
+      - 'app_python/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: 3.11
+        cache: "pip"
+      
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app_python/requirements.txt
+        pip install -r app_python/requirements-dev.txt
+      
+    - name: Run linter
+      run: ruff check .
+      
+    - name: Run pytest tests
+      run: |
+        pytest -v
+    
+    - name: Install Snyk CLI
+      run: npm install -g snyk
+
+    - name: Run Snyk Test
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      run: snyk test app_python --severity-threshold=high
+
+
+  docker:
+    if: github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate version
+        run: echo "VERSION=$(date +%Y.%m.%d)" >> $GITHUB_ENV
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./app_python
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-info-service:${{ env.VERSION }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/devops-info-service:latest
