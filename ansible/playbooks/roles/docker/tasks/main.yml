@@ -1,0 +1,43 @@
+---
+- name: Docker installation
+  block:
+
+    - name: Install Docker package
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+  rescue:
+
+    - name: Update apt cache if install failed
+      command: apt-get update
+      become: true
+
+  always:
+
+    - name: Ensure Docker service is started
+      service:
+        name: docker
+        state: started
+        enabled: true
+
+  become: true
+  tags:
+    - docker
+    - docker_install
+
+
+- name: Docker configuration
+  block:
+
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+  become: true
+  tags:
+    - docker
+    - docker_config
