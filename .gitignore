@@ -1,1 +1,26 @@
-test
+# Python
+__pycache__/
+*/__pycache__/
+*.py[cod]
+venv/
+*.log
+app_python/venv/
+app_python/__pycache__/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Env
+.env
+venv/
+.venv/
+app_python/**/venv/
+
+# Other
+*.log
+*.zip
+labs/lab18/app_python/result
